@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Base modifications for the Immersive UI Theme */
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: #050507;
+  color: #e2e8f0;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Hide scrollbars across the app for that clean console interface look */
+::-webkit-scrollbar {
+  display: none;
+}
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+/* Immersive Theme core classes */
+.game-container-bg {
+  background: radial-gradient(circle at 50% -20%, #1a1b26 0%, #050507 80%);
+}
+
+.panel-glass {
+  background: rgba(20, 20, 25, 0.7);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.stat-row:last-child {
+  border-bottom: none;
+}
+
+.stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+}
+
+.stat-value {
+  font-family: monospace;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.xp-bar-fill {
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+}
+
+.health-bar-fill {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+}
+
+.btn-active {
+  background: rgba(59, 130, 246, 0.15) !important;
+  border: 1px solid #3b82f6 !important;
+  color: #60a5fa !important;
+}
+
+/* Floating animation for combat icons */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}

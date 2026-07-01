@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Incremental Progression RPG",
+  "description": "An incremental progression role-playing game featuring manual and auto combat, level progression, races, traits, prestige resets, detailed stats, premium convenience upgrades, and a multiplayer social hub.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
