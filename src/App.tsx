@@ -50,6 +50,7 @@ import PremiumPanel from "./components/PremiumPanel";
 import SavesPanel from "./components/SavesPanel";
 import PrestigePanel from "./components/PrestigePanel";
 import InventoryPanel from "./components/InventoryPanel";
+import CheckoutPage, { GemPack } from "./components/CheckoutPage";
 
 // Default State Creator
 const createInitialPlayerState = (): PlayerStats => ({
@@ -75,6 +76,8 @@ const createInitialPlayerState = (): PlayerStats => ({
   hasAutoBattleUnlocked: false,
   hasPrestigeEnhancement: false,
   hasVipStatus: false,
+  hasKeepItemsOnPrestige: false,
+  hasXpRetention: false,
   musicVolume: 35,
   sfxVolume: 50,
   soundOn: false,
@@ -91,6 +94,7 @@ export default function App() {
   
   // Tabs & Views
   const [activeTab, setActiveTab] = useState<"combat" | "upgrades" | "gacha" | "multiplayer" | "raid" | "premium" | "saves" | "prestige" | "inventory">("combat");
+  const [activeCheckoutPack, setActiveCheckoutPack] = useState<GemPack | null>(null);
   
   // Loot Equipment States
   const [inventory, setInventory] = useState<Equipment[]>([]);
@@ -118,6 +122,8 @@ export default function App() {
   const [isPlayerDying, setIsPlayerDying] = useState<boolean>(false);
   const [isPlayerAttacking, setIsPlayerAttacking] = useState<boolean>(false);
   const [isEnemyAttacking, setIsEnemyAttacking] = useState<boolean>(false);
+  const [isScreenShaking, setIsScreenShaking] = useState<boolean>(false);
+  const [isMonsterFlashing, setIsMonsterFlashing] = useState<boolean>(false);
   const [prestigeAnimate, setPrestigeAnimate] = useState<boolean>(false);
 
   // Floating text / Damage display
@@ -395,6 +401,10 @@ export default function App() {
     setIsPlayerAttacking(true);
     setTimeout(() => setIsPlayerAttacking(false), 200);
 
+    // Subtle monster damage flash effect
+    setIsMonsterFlashing(true);
+    setTimeout(() => setIsMonsterFlashing(false), 150);
+
     // 1. Calculate player strike
     const str = getStrength();
     const isCrit = Math.random() < getCritRate();
@@ -432,6 +442,9 @@ export default function App() {
     if (isCrit) {
       playSfx("crit");
       spawnFloatingText(`CRIT! -${finalDamage.toLocaleString()}`, "crit");
+      // Tactile screen shake on critical hits
+      setIsScreenShaking(true);
+      setTimeout(() => setIsScreenShaking(false), 300);
     } else {
       playSfx("hit");
       spawnFloatingText(`-${finalDamage.toLocaleString()}`, "hit");
@@ -812,6 +825,15 @@ export default function App() {
     setAutoBattleActive(false);
 
     setTimeout(() => {
+      let nextLevel = 1;
+      let nextExp = 0;
+
+      if (playerState.hasXpRetention) {
+        // Keep 20% of the level reached before prestiging
+        nextLevel = Math.max(1, Math.floor(playerState.level * 0.20));
+        nextExp = 0;
+      }
+
       setPlayerState((prev) => {
         const nextPrestige = prev.prestige + 1;
         
@@ -827,8 +849,8 @@ export default function App() {
         // Rebuild temporary reset variables
         return {
           ...prev,
-          level: 1,
-          exp: 0,
+          level: nextLevel,
+          exp: nextExp,
           coins: 100, // starting cash boost
           prestige: nextPrestige,
           gems: prev.gems + 50,
@@ -841,8 +863,22 @@ export default function App() {
         };
       });
 
+      // Clear or keep inventory items and equipped gear
+      if (!playerState.hasKeepItemsOnPrestige) {
+        setInventory([]);
+        setEquipped({
+          weapon: null,
+          armor: null,
+          helmet: null,
+          accessory: null,
+        });
+        pushCombatLog("defeat", "🎒 Your items and equipment have crumbled in the prestige furnace!");
+      } else {
+        pushCombatLog("victory", "🛡️ Your Ethereal Vault Key preserved your items and equipped gear!");
+      }
+
       // Revive HP pools
-      setPlayerHp(110); // Base level 1 HP
+      setPlayerHp(110); // Base level 1 HP (will be recalculated in useEffect)
       setEnemyHp(activeEnemy.maxHp);
       
       setPrestigeAnimate(false);
@@ -881,7 +917,7 @@ export default function App() {
     playSfx("levelUp");
   };
 
-  const handleBuyPremium = (itemType: "xpBoost" | "coinBoost" | "autoBattle" | "prestigeEnhance" | "vipStatus", cost: number) => {
+  const handleBuyPremium = (itemType: "xpBoost" | "coinBoost" | "autoBattle" | "prestigeEnhance" | "vipStatus" | "keepItems" | "xpRetention", cost: number) => {
     if (playerState.gems < cost) return;
 
     setPlayerState((prev) => {
@@ -891,6 +927,8 @@ export default function App() {
       else if (itemType === "autoBattle") updated.hasAutoBattleUnlocked = true;
       else if (itemType === "prestigeEnhance") updated.hasPrestigeEnhancement = true;
       else if (itemType === "vipStatus") updated.hasVipStatus = true;
+      else if (itemType === "keepItems") updated.hasKeepItemsOnPrestige = true;
+      else if (itemType === "xpRetention") updated.hasXpRetention = true;
       return updated;
     });
     playSfx("prestige");
@@ -1086,7 +1124,19 @@ export default function App() {
             </div>
 
             {/* BATTLEGROUND SCREEN: Models of Monster & Player */}
-            <div className="relative flex-1 min-h-[180px] lg:min-h-[200px] max-h-[260px] w-full flex flex-col justify-between items-center py-3 bg-slate-950/40 border border-white/5 rounded-2xl" id="battleground-graphics-box">
+            <motion.div
+              id="battleground-graphics-box"
+              animate={
+                isScreenShaking
+                  ? {
+                      x: [0, -6, 6, -6, 6, -3, 3, 0],
+                      y: [0, 4, -4, 4, -4, 2, -2, 0],
+                    }
+                  : { x: 0, y: 0 }
+              }
+              transition={{ duration: 0.25, ease: "easeInOut" }}
+              className="relative flex-1 min-h-[180px] lg:min-h-[200px] max-h-[260px] w-full flex flex-col justify-between items-center py-3 bg-slate-950/40 border border-white/5 rounded-2xl"
+            >
               
               {/* Floating numbers layer */}
               <FloatingCombatText items={floatingTexts} />
@@ -1101,8 +1151,10 @@ export default function App() {
                 }`}
               >
                 <div className="relative">
-                  <div className={`mx-auto h-20 w-20 rounded-full border bg-gradient-to-b flex items-center justify-center overflow-hidden text-4xl shadow-md ${
-                    activeEnemy.isBoss
+                  <div className={`mx-auto h-20 w-20 rounded-full border bg-gradient-to-b flex items-center justify-center overflow-hidden text-4xl shadow-md relative transition-all duration-75 ${
+                    isMonsterFlashing
+                      ? "border-red-500 ring-4 ring-red-500/30"
+                      : activeEnemy.isBoss
                       ? "from-rose-950 to-slate-900 border-rose-500 shadow-rose-500/10"
                       : "from-slate-900 to-slate-950 border-slate-800"
                   }`}>
@@ -1115,6 +1167,9 @@ export default function App() {
                       />
                     ) : (
                       activeEnemy.isBoss ? "👹" : "👾"
+                    )}
+                    {isMonsterFlashing && (
+                      <div className="absolute inset-0 bg-red-600/30 mix-blend-overlay pointer-events-none" />
                     )}
                   </div>
                   {activeEnemy.isBoss && (
@@ -1180,7 +1235,7 @@ export default function App() {
                 </div>
               </motion.div>
 
-            </div>
+            </motion.div>
 
             {/* CONTROLS ZONE: Attack triggers & Auto toggler */}
             <div className="space-y-3 z-10" id="battleground-controls-zone">
@@ -1239,7 +1294,7 @@ export default function App() {
 
               </div>
 
-              {/* Prestige Reset Panel (Always visible for clarity and sandbox tests) */}
+              {/* Prestige Reset Panel (Always visible for clarity) */}
               <div
                 id="prestige-reset-box"
                 className={`p-3 border rounded-xl flex flex-col justify-between items-center text-center gap-2 animate-in fade-in duration-200 ${
@@ -1270,19 +1325,6 @@ export default function App() {
                   >
                     <Crown size={12} /> Ascend Prestige Rank
                   </button>
-                  {playerState.level < 50 && (
-                    <button
-                      id="btn-prestige-cheat-level"
-                      onClick={() => {
-                        setPlayerState((prev) => ({ ...prev, level: 50 }));
-                        pushCombatLog("level_up", "✨ Sandbox Mode: Level boosted to 50! Open the Prestige tab or click Ascend to transcend!");
-                      }}
-                      className="px-3 py-2 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-400 rounded-lg font-mono text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
-                      title="Instantly set level to 50 for quick testing"
-                    >
-                      ⚡ Get Lv.50
-                    </button>
-                  )}
                 </div>
               </div>
             </div>
@@ -1328,7 +1370,7 @@ export default function App() {
           {/* TAB BUTTONS LIST */}
           <div
             id="tab-buttons-container"
-            className="flex flex-wrap items-center panel-glass p-1.5 gap-1 shrink-0 overflow-x-auto"
+            className="flex flex-nowrap lg:flex-wrap items-center panel-glass p-1.5 gap-1 shrink-0 overflow-x-auto scrollbar-none"
           >
             {[
               { id: "combat", label: "🗺️ Adventure", icon: Compass },
@@ -1365,15 +1407,37 @@ export default function App() {
           <div className="flex-1 lg:min-h-0 lg:overflow-y-auto pr-1" id="active-tab-panel-container">
             <AnimatePresence mode="wait">
               <motion.div
-                key={activeTab}
+                key={activeCheckoutPack ? "checkout" : activeTab}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.15 }}
                 className="h-full"
               >
-                {/* 1. AREAS & STATS COLUMN */}
-                {activeTab === "combat" && (
+                {activeCheckoutPack ? (
+                  <CheckoutPage
+                    pack={activeCheckoutPack}
+                    onComplete={(gemsEarned) => {
+                      handleGrantGems(gemsEarned);
+                      setActiveCheckoutPack(null);
+                      setCombatLogs((prev) => [
+                        {
+                          id: Math.random().toString(),
+                          text: `👑 Purchase complete! Received 💎 ${gemsEarned.toLocaleString()} premium crystals.`,
+                          type: "gain",
+                        },
+                        ...prev.slice(0, 49),
+                      ]);
+                    }}
+                    onCancel={() => {
+                      setActiveCheckoutPack(null);
+                    }}
+                    playSfx={playSfx}
+                  />
+                ) : (
+                  <>
+                    {/* 1. AREAS & STATS COLUMN */}
+                    {activeTab === "combat" && (
                   <div className="space-y-4" id="view-areas-combat">
                     {/* Character Stats sheet (Bento look) */}
                     <div className="panel-glass p-4 space-y-3">
@@ -1574,12 +1638,15 @@ export default function App() {
                     hasAutoBattleUnlocked={playerState.hasAutoBattleUnlocked}
                     hasPrestigeEnhancement={playerState.hasPrestigeEnhancement}
                     hasVipStatus={playerState.hasVipStatus}
+                    hasKeepItemsOnPrestige={playerState.hasKeepItemsOnPrestige}
+                    hasXpRetention={playerState.hasXpRetention}
                     raceRollsOwned={raceRollsOwned}
                     traitRollsOwned={traitRollsOwned}
                     onBuyPremium={handleBuyPremium}
                     onBuyRolls={handleBuyRolls}
                     onGrantGems={handleGrantGems}
                     playSfx={playSfx}
+                    onStartCheckout={(pack) => setActiveCheckoutPack(pack)}
                   />
                 )}
 
@@ -1600,11 +1667,9 @@ export default function App() {
                     level={playerState.level}
                     prestige={playerState.prestige}
                     hasPrestigeEnhancement={playerState.hasPrestigeEnhancement}
+                    hasKeepItemsOnPrestige={playerState.hasKeepItemsOnPrestige}
+                    hasXpRetention={playerState.hasXpRetention}
                     onPerformPrestige={handlePerformPrestige}
-                    onSetLevel={(lvl) => {
-                      setPlayerState((prev) => ({ ...prev, level: lvl }));
-                      pushCombatLog("level_up", `✨ Sandbox Mode: Character Level boosted to ${lvl}!`);
-                    }}
                   />
                 )}
 
@@ -1625,7 +1690,9 @@ export default function App() {
                     playerLevel={playerState.level}
                   />
                 )}
-              </motion.div>
+              </>
+            )}
+          </motion.div>
             </AnimatePresence>
           </div>
 
@@ -1641,7 +1708,7 @@ export default function App() {
             <span>Incremental Progression RPG Engine v1.8.0. Standard multi-tier arithmetic matrices.</span>
           </div>
           <div className="flex items-center gap-3">
-            <span>© 2026 Retro Idle Sandbox</span>
+            <span>© 2026 Retro Idle Adventure</span>
             <span className="text-slate-700">|</span>
             <span className="text-indigo-400">Auto Save Status: ACTIVE</span>
           </div>

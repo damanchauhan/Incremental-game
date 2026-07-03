@@ -82,6 +82,8 @@ export interface PlayerStats {
   hasAutoBattleUnlocked: boolean;
   hasPrestigeEnhancement: boolean;
   hasVipStatus: boolean;
+  hasKeepItemsOnPrestige: boolean;
+  hasXpRetention: boolean;
 
   // Sound settings
   musicVolume: number; // 0 to 100

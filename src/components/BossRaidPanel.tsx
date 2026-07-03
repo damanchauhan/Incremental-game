@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
-import { Flame, ShieldAlert, Sparkles, Timer, Users, Award } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Flame, ShieldAlert, Sparkles, Timer, Users, Award, Globe } from "lucide-react";
 import { audio } from "../audio";
 import voidBehemothImg from "../assets/images/void_behemoth_1782859996623.jpg";
 
@@ -39,17 +39,42 @@ export const BossRaidPanel: React.FC<BossRaidPanelProps> = ({
   const [timeLeft, setTimeLeft] = useState(1800); // 30 minutes in seconds
   const [raidLogs, setRaidLogs] = useState<RaidLog[]>([]);
   const [autoRaidOn, setAutoRaidOn] = useState(false);
-  const [victoryRewardsClaimed, setVictoryRewardsClaimed] = useState(false);
+  const [currentRaidId, setCurrentRaidId] = useState("");
+  const [claimedRaidId, setClaimedRaidId] = useState<string>(() => {
+    return localStorage.getItem("claimed_raid_id") || "";
+  });
 
-  // Time ticker
+  const victoryRewardsClaimed = claimedRaidId === currentRaidId;
+
+  // Fetch current state from the server
+  const fetchRaidStatus = async () => {
+    try {
+      const response = await fetch("/api/raid");
+      if (response.ok) {
+        const data = await response.json();
+        setBossHp(data.bossHp);
+        setTimeLeft(data.timeLeft);
+        setRaidLogs(data.raidLogs);
+        setCurrentRaidId(data.currentRaidId);
+      }
+    } catch (error) {
+      console.error("Failed to fetch raid status from server:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchRaidStatus();
+    // Poll the server for updates every 3 seconds
+    const interval = setInterval(fetchRaidStatus, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Time ticker (decrements locally for smooth countdown in-between polling updates)
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          // Reset boss
-          setBossHp(BOSS_MAX_HP);
-          setPersonalDamage(0);
-          setVictoryRewardsClaimed(false);
+          fetchRaidStatus(); // Sync immediately when timer resets
           return 1800;
         }
         return prev - 1;
@@ -58,6 +83,17 @@ export const BossRaidPanel: React.FC<BossRaidPanelProps> = ({
     return () => clearInterval(timer);
   }, []);
 
+  // Reset personal damage tracking when a new raid boss cycle begins
+  useEffect(() => {
+    if (currentRaidId) {
+      const lastRaidId = localStorage.getItem("last_raid_id");
+      if (lastRaidId !== currentRaidId) {
+        setPersonalDamage(0);
+        localStorage.setItem("last_raid_id", currentRaidId);
+      }
+    }
+  }, [currentRaidId]);
+
   // Format time (MM:SS)
   const formatTime = (secs: number) => {
     const mins = Math.floor(secs / 60);
@@ -65,27 +101,8 @@ export const BossRaidPanel: React.FC<BossRaidPanelProps> = ({
     return `${mins.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
-  // Simulate passive guildmates contributing damage
-  useEffect(() => {
-    const guildTick = setInterval(() => {
-      if (bossHp <= 0) return;
-
-      const allies = ["GamerGod_Raid", "ElfArcher99", "DwarfHammer", "LichSlayer", "ShadowAssassin"];
-      const chosenAlly = allies[Math.floor(Math.random() * allies.length)];
-      const allyDmg = Math.floor(playerLevel * 45 + Math.random() * 250);
-      
-      setBossHp((prev) => Math.max(0, prev - allyDmg));
-      setRaidLogs((prev) => [
-        { id: Math.random().toString(), player: chosenAlly, damage: allyDmg },
-        ...prev.slice(0, 8),
-      ]);
-    }, 4500);
-
-    return () => clearInterval(guildTick);
-  }, [bossHp, playerLevel]);
-
   // Handle active user strike
-  const handleStrike = () => {
+  const handleStrike = async () => {
     if (bossHp <= 0) return;
 
     // Standard attack with potential crit (15% chance for visual flare)
@@ -99,13 +116,31 @@ export const BossRaidPanel: React.FC<BossRaidPanelProps> = ({
       playSfx("hit");
     }
 
+    // Instantly apply local feedback so combat feels snappy and lag-free
     setBossHp((prev) => Math.max(0, prev - dmg));
     setPersonalDamage((prev) => prev + dmg);
-    
-    setRaidLogs((prev) => [
-      { id: Math.random().toString(), player: "You (Hero)", damage: dmg, isReal: true },
-      ...prev.slice(0, 8),
-    ]);
+
+    try {
+      const response = await fetch("/api/raid/strike", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ player: "You (Hero)", damage: dmg })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setBossHp(data.bossHp);
+        setTimeLeft(data.timeLeft);
+        setRaidLogs(data.raidLogs);
+        setCurrentRaidId(data.currentRaidId);
+      }
+    } catch (error) {
+      console.error("Error submitting strike to server:", error);
+      // Fallback local update if server is unreachable
+      setRaidLogs((prev) => [
+        { id: Math.random().toString(), player: "You (Hero)", damage: dmg, isReal: true },
+        ...prev.slice(0, 8),
+      ]);
+    }
   };
 
   // Auto Strike Trigger
@@ -137,7 +172,10 @@ export const BossRaidPanel: React.FC<BossRaidPanelProps> = ({
     onLootItem(sunfireItem);
     
     playSfx("levelUp");
-    setVictoryRewardsClaimed(true);
+    
+    // Mark as claimed for this raid ID
+    localStorage.setItem("claimed_raid_id", currentRaidId);
+    setClaimedRaidId(currentRaidId);
     
     setRaidLogs((prev) => [
       { id: `victory_${Date.now()}`, player: "SYSTEM: LOOT AWARDED", damage: 999999 },
@@ -156,10 +194,14 @@ export const BossRaidPanel: React.FC<BossRaidPanelProps> = ({
             <Flame size={20} className="animate-pulse" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-1.5">
+            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-1.5 flex-wrap">
               Cooperative World Boss Raid
               <span className="px-1.5 py-0.5 text-[9px] bg-rose-500/20 border border-rose-500/30 text-rose-400 rounded-md uppercase font-mono animate-bounce">
                 Live
+              </span>
+              <span className="px-1.5 py-0.5 text-[9px] bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 rounded-md uppercase font-mono flex items-center gap-1">
+                <Globe size={10} className="text-indigo-400 animate-pulse" />
+                Server Synced
               </span>
             </h3>
             <p className="text-[10px] text-slate-400">All players online combine forces to conquer this titanic horror!</p>

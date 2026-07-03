@@ -18,25 +18,15 @@ interface LeaderboardPanelProps {
   savedName: string;
 }
 
-// Initial robust seed list of players for active competition
-const INITIAL_LEADERBOARD: LeaderboardPlayer[] = [
-  { id: "1", name: "VoidSovereign", level: 98, prestige: 8, raceName: "Dragonkin", rarity: Rarity.LEGENDARY, traits: ["Double Strike", "Time Warp"], coins: 145000000, totalDamage: 480000 },
-  { id: "2", name: "OrcFrenzy", level: 82, prestige: 6, raceName: "Orc", rarity: Rarity.EPIC, traits: ["Adrenaline", "Bloodlust"], coins: 85000000, totalDamage: 320000 },
-  { id: "3", name: "LegolasElf", level: 71, prestige: 5, raceName: "Elf", rarity: Rarity.UNCOMMON, traits: ["Double Strike"], coins: 34000000, totalDamage: 195000 },
-  { id: "4", name: "DwarfDigger", level: 65, prestige: 4, raceName: "Dwarf", rarity: Rarity.RARE, traits: ["Gold Digger", "Bloodlust"], coins: 58000000, totalDamage: 140000 },
-  { id: "5", name: "SlimeSlayer99", level: 48, prestige: 2, raceName: "Human", rarity: Rarity.COMMON, traits: ["Gold Digger"], coins: 12000000, totalDamage: 65000 },
-  { id: "6", name: "ShadowStalker", level: 39, prestige: 2, raceName: "Elf", rarity: Rarity.UNCOMMON, traits: ["Bloodlust"], coins: 4500000, totalDamage: 45000 },
-  { id: "7", name: "NoobGrinder", level: 25, prestige: 1, raceName: "Human", rarity: Rarity.COMMON, traits: [], coins: 120000, totalDamage: 15000 },
-  { id: "8", name: "StoneBreaker", level: 14, prestige: 0, raceName: "Dwarf", rarity: Rarity.RARE, traits: [], coins: 15000, totalDamage: 4200 },
-];
-
-const FEEDS_POOL = [
-  { template: "{name} reached Level {level}!", type: "level" },
-  { template: "{name} just rolled a {rarity} {race} race!", type: "race" },
-  { template: "{name} reset their stats and reached Prestige {prestige}!", type: "prestige" },
-  { template: "{name} defeated the Area Boss and earned massive coins!", type: "boss" },
-  { template: "{name} unlocked the legendary '{trait}' trait!", type: "trait" },
-];
+// Helper to retrieve or initialize a unique persistent multiplayer player ID
+const getPlayerId = () => {
+  let pid = localStorage.getItem("multiplayer_player_id");
+  if (!pid) {
+    pid = "pid_" + Math.random().toString(36).substring(2, 11);
+    localStorage.setItem("multiplayer_player_id", pid);
+  }
+  return pid;
+};
 
 export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   playerLevel,
@@ -48,7 +38,7 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   onSubmitProfile,
   savedName,
 }) => {
-  const [leaderboard, setLeaderboard] = useState<LeaderboardPlayer[]>(INITIAL_LEADERBOARD);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardPlayer[]>([]);
   const [activityFeed, setActivityFeed] = useState<string[]>([]);
   const [playerName, setPlayerName] = useState("");
   const [isRegistered, setIsRegistered] = useState(false);
@@ -60,121 +50,89 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
       setIsRegistered(true);
       setPlayerName(savedName);
     }
-    
-    // Seed initial activity logs
-    setActivityFeed([
-      "Welcome to the multiplayer progressive lobby!",
-      "VoidSovereign just defeated Singularity Keeper!",
-      "OrcFrenzy reached Prestige level 8.",
-    ]);
   }, [savedName]);
 
-  // Keep leaderboard updated with current player stats if registered
+  // Load and poll the active leaderboard and feed from the server
+  useEffect(() => {
+    const fetchLeaderboard = async () => {
+      try {
+        const response = await fetch("/api/leaderboard");
+        if (response.ok) {
+          const data = await response.json();
+          const myId = getPlayerId();
+          const mappedLeaderboard = (data.leaderboard || []).map((p: any) => ({
+            ...p,
+            isRealPlayer: p.id === myId,
+          }));
+          setLeaderboard(mappedLeaderboard);
+          setActivityFeed(data.activityFeed || []);
+        }
+      } catch (e) {
+        console.error("Failed to fetch leaderboard from server:", e);
+      }
+    };
+
+    fetchLeaderboard();
+    const interval = setInterval(fetchLeaderboard, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Submit and update player stats on the server whenever relevant values change
   useEffect(() => {
     if (isRegistered && playerName) {
-      setLeaderboard((prev) => {
-        const filtered = prev.filter((p) => p.id !== "player");
-        const playerEntry: LeaderboardPlayer = {
-          id: "player",
-          name: `${playerName} (You)`,
+      const submitProfile = async () => {
+        try {
+          await fetch("/api/leaderboard/submit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: getPlayerId(),
+              name: playerName,
+              level: playerLevel,
+              prestige: playerPrestige,
+              raceName: playerRaceName,
+              rarity: playerRaceRarity,
+              traits: playerTraits,
+              coins: playerCoins,
+            }),
+          });
+        } catch (e) {
+          console.error("Failed to submit leaderboard profile to server:", e);
+        }
+      };
+
+      submitProfile();
+      const interval = setInterval(submitProfile, 15000);
+      return () => clearInterval(interval);
+    }
+  }, [isRegistered, playerName, playerLevel, playerPrestige, playerCoins, playerRaceName, playerRaceRarity, playerTraits]);
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanName = playerName.trim().substring(0, 16);
+    if (!cleanName) return;
+    onSubmitProfile(cleanName);
+    setIsRegistered(true);
+
+    // Sync immediately upon registration
+    try {
+      await fetch("/api/leaderboard/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: getPlayerId(),
+          name: cleanName,
           level: playerLevel,
           prestige: playerPrestige,
           raceName: playerRaceName,
           rarity: playerRaceRarity,
           traits: playerTraits,
           coins: playerCoins,
-          totalDamage: playerLevel * 300 + playerPrestige * 5000,
-          isRealPlayer: true,
-        };
-        const newList = [...filtered, playerEntry];
-        // Sort by Prestige desc, then Level desc, then Coins desc
-        return newList.sort((a, b) => {
-          if (b.prestige !== a.prestige) return b.prestige - a.prestige;
-          if (b.level !== a.level) return b.level - a.level;
-          return b.coins - a.coins;
-        });
+        }),
       });
+    } catch (err) {
+      console.error("Failed to register profile to server leaderboard:", err);
     }
-  }, [isRegistered, playerName, playerLevel, playerPrestige, playerCoins, playerRaceName, playerRaceRarity, playerTraits]);
-
-  // Simulate passive peer multiplayer activity over time
-  useEffect(() => {
-    const interval = setInterval(() => {
-      // Pick a random player to modify (excluding player)
-      const nonPlayerIndices = leaderboard
-        .map((p, idx) => (p.id !== "player" ? idx : -1))
-        .filter((idx) => idx !== -1);
-
-      if (nonPlayerIndices.length === 0) return;
-      const targetIdx = nonPlayerIndices[Math.floor(Math.random() * nonPlayerIndices.length)];
-      const targetPlayer = { ...leaderboard[targetIdx] };
-
-      // Random event trigger
-      const event = FEEDS_POOL[Math.floor(Math.random() * FEEDS_POOL.length)];
-      let message = "";
-
-      if (event.type === "level") {
-        targetPlayer.level += Math.floor(Math.random() * 3) + 1;
-        message = event.template
-          .replace("{name}", targetPlayer.name)
-          .replace("{level}", String(targetPlayer.level));
-      } else if (event.type === "race") {
-        const raceChoices = ["Orc", "Elf", "Dwarf", "Dragonkin"];
-        const chosenRace = raceChoices[Math.floor(Math.random() * raceChoices.length)];
-        const rarities = [Rarity.UNCOMMON, Rarity.RARE, Rarity.EPIC, Rarity.LEGENDARY];
-        const chosenRarity = rarities[Math.floor(Math.random() * rarities.length)];
-        targetPlayer.raceName = chosenRace;
-        targetPlayer.rarity = chosenRarity;
-        message = event.template
-          .replace("{name}", targetPlayer.name)
-          .replace("{rarity}", chosenRarity)
-          .replace("{race}", chosenRace);
-      } else if (event.type === "prestige") {
-        targetPlayer.prestige += 1;
-        targetPlayer.level = 1;
-        message = event.template
-          .replace("{name}", targetPlayer.name)
-          .replace("{prestige}", String(targetPlayer.prestige));
-      } else if (event.type === "boss") {
-        targetPlayer.coins += Math.floor(targetPlayer.level * 2500);
-        message = event.template.replace("{name}", targetPlayer.name);
-      } else if (event.type === "trait") {
-        const traits = ["Bloodlust", "Gold Digger", "Adrenaline", "Time Warp", "Double Strike"];
-        const chosenTrait = traits[Math.floor(Math.random() * traits.length)];
-        if (!targetPlayer.traits.includes(chosenTrait)) {
-          targetPlayer.traits = [...targetPlayer.traits, chosenTrait];
-        }
-        message = event.template
-          .replace("{name}", targetPlayer.name)
-          .replace("{trait}", chosenTrait);
-      }
-
-      // Update leaderboard list
-      setLeaderboard((prev) => {
-        const next = [...prev];
-        next[targetIdx] = targetPlayer;
-        return next.sort((a, b) => {
-          if (b.prestige !== a.prestige) return b.prestige - a.prestige;
-          if (b.level !== a.level) return b.level - a.level;
-          return b.coins - a.coins;
-        });
-      });
-
-      // Update feed
-      if (message) {
-        setActivityFeed((prev) => [message, ...prev.slice(0, 15)]);
-      }
-    }, 12000); // Trigger every 12s for active lobby feel
-
-    return () => clearInterval(interval);
-  }, [leaderboard]);
-
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanName = playerName.trim().substring(0, 16);
-    if (!cleanName) return;
-    onSubmitProfile(cleanName);
-    setIsRegistered(true);
   };
 
   const getRarityBadgeColor = (rarity: Rarity) => {

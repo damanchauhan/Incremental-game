@@ -22,16 +22,18 @@ interface PrestigePanelProps {
   level: number;
   prestige: number;
   hasPrestigeEnhancement: boolean;
+  hasKeepItemsOnPrestige: boolean;
+  hasXpRetention: boolean;
   onPerformPrestige: () => void;
-  onSetLevel?: (lvl: number) => void;
 }
 
 export const PrestigePanel: React.FC<PrestigePanelProps> = ({
   level,
   prestige,
   hasPrestigeEnhancement,
+  hasKeepItemsOnPrestige,
+  hasXpRetention,
   onPerformPrestige,
-  onSetLevel,
 }) => {
   const PRESTIGE_REQ_LEVEL = 50;
   const isEligible = level >= PRESTIGE_REQ_LEVEL;
@@ -165,9 +167,24 @@ export const PrestigePanel: React.FC<PrestigePanelProps> = ({
             </h4>
           </div>
           <ul className="space-y-2 text-[10px] font-mono text-slate-400">
-            <li className="flex items-center gap-2 text-rose-200/70">
-              <span className="text-rose-500">❌</span> Player Level resets back to 1
-            </li>
+            {hasXpRetention ? (
+              <li className="flex items-center gap-2 text-emerald-400 font-bold bg-emerald-500/5 px-1.5 py-0.5 rounded border border-emerald-500/15">
+                <span>🛡️</span> Retaining 20% of your level! (Start at level {Math.max(1, Math.floor(level * 0.20))})
+              </li>
+            ) : (
+              <li className="flex items-center gap-2 text-rose-200/70">
+                <span className="text-rose-500">❌</span> Player Level resets back to 1 (0% Level kept)
+              </li>
+            )}
+            {!hasKeepItemsOnPrestige ? (
+              <li className="flex items-center gap-2 text-rose-200/70">
+                <span className="text-rose-500">❌</span> All inventory items & equipped gear are lost
+              </li>
+            ) : (
+              <li className="flex items-center gap-2 text-emerald-400 font-bold bg-emerald-500/5 px-1.5 py-0.5 rounded border border-emerald-500/15">
+                <span>🛡️</span> Preserving all equipment and items!
+              </li>
+            )}
             <li className="flex items-center gap-2 text-rose-200/70">
               <span className="text-rose-500">❌</span> Gold Coin Balance resets to 100
             </li>
@@ -192,6 +209,16 @@ export const PrestigePanel: React.FC<PrestigePanelProps> = ({
             </h4>
           </div>
           <ul className="space-y-2 text-[10px] font-mono text-slate-400">
+            {hasKeepItemsOnPrestige && (
+              <li className="flex items-center gap-2 text-emerald-400 font-extrabold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                <span>⭐</span> Loot Inventory & Equipped Items (Vault Key)
+              </li>
+            )}
+            {hasXpRetention && (
+              <li className="flex items-center gap-2 text-emerald-400 font-extrabold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                <span>⭐</span> 20% Level Anchor Retention (Chronos Anchor)
+              </li>
+            )}
             <li className="flex items-center gap-2 text-emerald-200/70">
               <span className="text-emerald-500">✅</span> Unlocked Race & currently active Traits
             </li>
@@ -246,17 +273,6 @@ export const PrestigePanel: React.FC<PrestigePanelProps> = ({
             <div className="w-full py-3 bg-slate-900/30 text-slate-600 border border-white/5 rounded-xl font-mono text-[10px] uppercase tracking-wider font-bold select-none">
               🔒 Lock Active (Need {PRESTIGE_REQ_LEVEL - level} More Levels)
             </div>
-            {onSetLevel && (
-              <div className="pt-2">
-                <button
-                  id="btn-prestige-panel-cheat"
-                  onClick={() => onSetLevel(50)}
-                  className="w-full py-2.5 rounded-lg text-xs font-bold font-mono uppercase tracking-wider bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-400 transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow"
-                >
-                  ⚡ Sandbox Mode: Instantly Set Level 50
-                </button>
-              </div>
-            )}
           </div>
         )}
       </div>

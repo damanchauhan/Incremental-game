@@ -4,7 +4,17 @@
  */
 
 import React, { useState } from "react";
-import { Gem, Sparkles, Zap, ShieldCheck, Award, Flame, Gift, Dices, RefreshCw } from "lucide-react";
+import { Gem, Sparkles, Zap, ShieldCheck, Award, Flame, Gift, Dices, RefreshCw, Key, Anchor } from "lucide-react";
+
+export interface GemPack {
+  id: string;
+  name: string;
+  gems: number;
+  price: string;
+  priceNum: number;
+  tag?: string;
+  description: string;
+}
 
 interface PremiumPanelProps {
   gems: number;
@@ -13,12 +23,15 @@ interface PremiumPanelProps {
   hasAutoBattleUnlocked: boolean;
   hasPrestigeEnhancement: boolean;
   hasVipStatus: boolean;
+  hasKeepItemsOnPrestige: boolean;
+  hasXpRetention: boolean;
   raceRollsOwned: number;
   traitRollsOwned: number;
-  onBuyPremium: (itemType: "xpBoost" | "coinBoost" | "autoBattle" | "prestigeEnhance" | "vipStatus", cost: number) => void;
+  onBuyPremium: (itemType: "xpBoost" | "coinBoost" | "autoBattle" | "prestigeEnhance" | "vipStatus" | "keepItems" | "xpRetention", cost: number) => void;
   onBuyRolls: (type: "race" | "trait", count: number, cost: number) => void;
   onGrantGems: (amt: number) => void;
   playSfx: (type: "hit" | "crit" | "levelUp" | "dodge" | "prestige") => void;
+  onStartCheckout: (pack: GemPack) => void;
 }
 
 export const PremiumPanel: React.FC<PremiumPanelProps> = ({
@@ -28,14 +41,24 @@ export const PremiumPanel: React.FC<PremiumPanelProps> = ({
   hasAutoBattleUnlocked,
   hasPrestigeEnhancement,
   hasVipStatus,
+  hasKeepItemsOnPrestige,
+  hasXpRetention,
   raceRollsOwned,
   traitRollsOwned,
   onBuyPremium,
   onBuyRolls,
   onGrantGems,
   playSfx,
+  onStartCheckout,
 }) => {
   const [dailyClaimed, setDailyClaimed] = useState(false);
+
+  const GEM_PACKS: GemPack[] = [
+    { id: "pack_1", name: "Pouch of Aether Crystals", gems: 150, price: "$1.99", priceNum: 1.99, description: "A starter bundle of purified crystals to kickstart your species gacha.", tag: "Starter" },
+    { id: "pack_2", name: "Reliquary of the Void", gems: 500, price: "$4.99", priceNum: 4.99, description: "Highly unstable gems radiating massive quantum progression energies.", tag: "Popular" },
+    { id: "pack_3", name: "Tomb of Eternal Jewels", gems: 1200, price: "$9.99", priceNum: 9.99, description: "Vault-grade gemstones for serious progression. Offers a massive 20% bonus count.", tag: "Best Value" },
+    { id: "pack_4", name: "Gilded Emperor's Hoard", gems: 3000, price: "$19.99", priceNum: 19.99, description: "Infinite cosmic wealth of raw diamonds to fully unlock species and trait tiers.", tag: "Ultimate" }
+  ];
 
   const handleClaimDailyGems = () => {
     if (dailyClaimed) return;
@@ -51,8 +74,8 @@ export const PremiumPanel: React.FC<PremiumPanelProps> = ({
 
   return (
     <div className="space-y-6" id="premium-panel-root">
-      {/* Gems Overview and Simulated Purchase */}
-      <div className="p-5 bg-gradient-to-r from-slate-950/40 to-indigo-950/20 panel-glass flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Gems Overview & Daily Claim */}
+      <div className="p-5 bg-gradient-to-r from-slate-950/40 to-indigo-950/20 panel-glass flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-indigo-500/10 text-indigo-400 rounded-2xl border border-indigo-500/20">
             <Gem size={24} className="animate-pulse" />
@@ -65,29 +88,66 @@ export const PremiumPanel: React.FC<PremiumPanelProps> = ({
           </div>
         </div>
 
-        {/* Claim Daily Gems & Dev Tools */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div>
           <button
             id="btn-claim-daily-gems"
             onClick={handleClaimDailyGems}
             disabled={dailyClaimed}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 border ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 border ${
               dailyClaimed
                 ? "bg-slate-950/40 border-white/5 text-slate-500 cursor-not-allowed"
-                : "bg-emerald-950/40 border-emerald-500/40 text-emerald-400 hover:bg-emerald-900/40 active:scale-95"
+                : "bg-emerald-950/40 border-emerald-500/40 text-emerald-400 hover:bg-emerald-900/40 active:scale-95 cursor-pointer"
             }`}
           >
             <Gift size={14} /> {dailyClaimed ? "Gems Claimed" : "Claim 50 Daily Gems"}
           </button>
+        </div>
+      </div>
 
-          <button
-            id="btn-simulate-buy-gems"
-            onClick={() => handleBuyGemsPack(500)}
-            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-all border border-indigo-400/20 active:scale-95 flex items-center gap-1 cursor-pointer"
-            title="Simulate currency purchase for game testing"
-          >
-            <Sparkles size={13} /> Buy 500 Gems (Simulated)
-          </button>
+      {/* Galactic Royal Treasury - Gem Store */}
+      <div className="space-y-4" id="premium-gems-shop-section">
+        <div>
+          <h3 className="text-sm font-bold uppercase tracking-widest text-indigo-400 flex items-center gap-1.5">
+            <Sparkles size={16} className="text-indigo-400 animate-pulse" />
+            Galactic Gem Crystals Depot
+          </h3>
+          <p className="text-xs text-slate-500">
+            Purchase Aether Gems to obtain race or trait rerolls and premium permanent boosts. Transactions are processed via our high-fidelity secure virtual checkout portal.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {GEM_PACKS.map((pack) => (
+            <div
+              key={pack.id}
+              className="p-4 bg-slate-950/30 border border-indigo-500/10 hover:border-indigo-500/30 rounded-xl flex flex-col justify-between gap-3 hover:bg-slate-950/50 transition-all group relative"
+            >
+              {pack.tag && (
+                <span className="absolute top-2 right-2 px-1.5 py-0.5 text-[8px] bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 rounded font-mono uppercase font-extrabold tracking-wider">
+                  {pack.tag}
+                </span>
+              )}
+              <div className="space-y-1.5">
+                <span className="text-xl font-bold block text-slate-300 font-mono flex items-center gap-1">
+                  💎 {pack.gems.toLocaleString()}
+                </span>
+                <h4 className="text-xs font-bold text-slate-200 group-hover:text-indigo-300 transition-colors">
+                  {pack.name}
+                </h4>
+                <p className="text-[10px] text-slate-400 leading-normal h-12 overflow-hidden">
+                  {pack.description}
+                </p>
+              </div>
+
+              <button
+                id={`btn-buy-pack-${pack.id}`}
+                onClick={() => onStartCheckout(pack)}
+                className="w-full py-2 bg-indigo-600/10 hover:bg-indigo-600 hover:text-white text-indigo-400 border border-indigo-500/30 rounded-lg text-xs font-mono font-bold transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1 shadow-inner"
+              >
+                Buy for {pack.price}
+              </button>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -320,6 +380,66 @@ export const PremiumPanel: React.FC<PremiumPanelProps> = ({
               }`}
             >
               {hasPrestigeEnhancement ? "PERMANENTLY UNLOCKED" : "💎 180 Gems"}
+            </button>
+          </div>
+
+          {/* ETHEREAL VAULT KEY */}
+          <div className="p-4 bg-slate-950/20 border border-white/5 rounded-lg flex flex-col justify-between gap-3 hover:border-white/10 transition-all">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="px-2 py-0.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded text-[9px] font-mono font-bold uppercase tracking-wider flex items-center gap-1">
+                  <Key size={10} /> Vault
+                </span>
+                {hasKeepItemsOnPrestige && <span className="text-emerald-400 font-mono font-bold text-[10px] flex items-center gap-0.5 uppercase tracking-wider">✓ Active</span>}
+              </div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200">Ethereal Vault Key (Keep Items)</h4>
+              <p className="text-[11px] text-slate-400">
+                Preserves and keeps all of your unlocked inventory items and currently equipped gear safe through prestige resets.
+              </p>
+            </div>
+            <button
+              id="btn-buy-keep-items"
+              onClick={() => onBuyPremium("keepItems", 250)}
+              disabled={hasKeepItemsOnPrestige || gems < 250}
+              className={`w-full py-2 font-mono text-xs uppercase tracking-widest font-bold rounded transition-all ${
+                hasKeepItemsOnPrestige
+                  ? "bg-slate-950/20 border border-white/5 text-slate-600 cursor-not-allowed"
+                  : gems >= 250
+                  ? "bg-gradient-to-r from-indigo-600 to-indigo-750 hover:from-indigo-500 hover:to-indigo-650 text-white cursor-pointer border border-indigo-400/20"
+                  : "bg-slate-900/40 text-slate-500 border border-white/5 cursor-not-allowed"
+              }`}
+            >
+              {hasKeepItemsOnPrestige ? "PERMANENTLY UNLOCKED" : "💎 250 Gems"}
+            </button>
+          </div>
+
+          {/* CHRONOS MEMORY ANCHOR */}
+          <div className="p-4 bg-slate-950/20 border border-white/5 rounded-lg flex flex-col justify-between gap-3 hover:border-white/10 transition-all">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="px-2 py-0.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded text-[9px] font-mono font-bold uppercase tracking-wider flex items-center gap-1">
+                  <Anchor size={10} /> Chrono
+                </span>
+                {hasXpRetention && <span className="text-emerald-400 font-mono font-bold text-[10px] flex items-center gap-0.5 uppercase tracking-wider">✓ Active</span>}
+              </div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200">Memory Anchor (20% Level Kept)</h4>
+              <p className="text-[11px] text-slate-400">
+                Maintains 20% of your current level after prestiging, allowing you to bypass early levels and start strong.
+              </p>
+            </div>
+            <button
+              id="btn-buy-xp-retention"
+              onClick={() => onBuyPremium("xpRetention", 200)}
+              disabled={hasXpRetention || gems < 200}
+              className={`w-full py-2 font-mono text-xs uppercase tracking-widest font-bold rounded transition-all ${
+                hasXpRetention
+                  ? "bg-slate-950/20 border border-white/5 text-slate-600 cursor-not-allowed"
+                  : gems >= 200
+                  ? "bg-gradient-to-r from-indigo-600 to-indigo-750 hover:from-indigo-500 hover:to-indigo-650 text-white cursor-pointer border border-indigo-400/20"
+                  : "bg-slate-900/40 text-slate-500 border border-white/5 cursor-not-allowed"
+              }`}
+            >
+              {hasXpRetention ? "PERMANENTLY UNLOCKED" : "💎 200 Gems"}
             </button>
           </div>
 
